@@ -11,6 +11,11 @@
  * @license GPL v3 - http://vork.us/go/mvz5
  */
 
+$iniPath = 'config.ini';
+if(is_file($iniPath)) {
+	$GLOBALS['config'] = parse_ini_file($iniPath,true);
+}
+
 /**
  * To enable password protection, uncomment below and then change the username => password
  * You can add as many users as needed, eg.: array('scott' => 'tiger', 'samantha' => 'goldfish', 'gene' => 'alpaca')
@@ -26,14 +31,28 @@
 /**
  * Sets the design theme - themes options are: swanky-purse, trontastic and classic
  */
-define('THEME', 'trontastic');
+if(isset($GLOBALS['config']['system']['theme'])) {
+ define('THEME', $GLOBALS['config']['system']['theme']);
+} else {
+ define('THEME', 'trontastic');
+}
 
 /**
  * To connect to a remote or authenticated Mongo instance, define the connection string in the MONGO_CONNECTION constant
  * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
  * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
  */
-define('MONGO_CONNECTION', '');
+if(isset($GLOBALS['config']['mongo']['0'])) {
+	$dbInfo = $GLOBALS['config']['mongo']['0'];
+	list($host,$port) = explode(':',$GLOBALS['config']['mongo']['0']);
+	$unpwd = '';
+	if(isset($GLOBALS['config']['mongo']['username']) && isset($GLOBALS['config']['mongo']['password'])) {
+		$unpwd = $GLOBALS['config']['mongo']['username'] . ':' . $GLOBALS['config']['mongo']['password'] . '@';
+	}
+	define('MONGO_CONNECTION', "mongodb://{$unpwd}{$host}:{$port}");
+} else {
+	define('MONGO_CONNECTION', '');
+}
 
 /**
  * Set to true when connecting to a Mongo replicaSet
