@@ -11,6 +11,10 @@
  * @license GPL v3 - http://vork.us/go/mvz5
  */
 
+/**
+ * Store settings in config.ini so code doesn't have to be changed to configure.
+ * Note: On Production, config path should be set outside web accessible directory -- usually ../config.ini
+ */
 $iniPath = 'config.ini';
 if(is_file($iniPath)) {
 	$GLOBALS['config'] = parse_ini_file($iniPath,true);
