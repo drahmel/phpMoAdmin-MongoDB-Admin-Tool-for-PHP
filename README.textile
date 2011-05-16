@@ -1,4 +1,10 @@
-{toc}
+h1. Fork Features
+
+Fork will add:
+
+* Additional statistics
+* Configuration settings stored in config.ini
+* SQL query system for Mongo
 
 h1. phpMoAdmin
 
@@ -94,12 +100,5 @@ h2. Contact phpMoAdmin
 
     "www.phpMoAdmin.com":http://www.phpMoAdmin.com
 
-h1. Fork Features
-
-Fork will add:
-
-* Additional statistics
-* Configuration settings stored in config.ini
-* SQL query system for Mongo
 
 !http://www.phpmoadmin.com/file/phpMoAdmin-MongoDB-Admin-GUI.jpg!
