@@ -11,20 +11,7 @@
  * @license GPL v3 - http://vork.us/go/mvz5
  */
 
-/**
- * Store settings in config.ini so code doesn't have to be changed to configure.
- * Note: On Production, config path should be set outside web accessible directory -- usually ../config.ini
- */
-$iniPath = 'config.ini';
-if(is_file($iniPath)) {
-	$GLOBALS['config'] = parse_ini_file($iniPath,true);
-}
-function getConfig($section,$key,$default=false) {
-	if(isset($GLOBALS['config'][$section][$key])) {
-		$default = $GLOBALS['config'][$section][$key];
-	}
-	return $default;
-}
+c::loadConfig();
 
 /**
  * To enable password protection, uncomment below and then change the username => password
@@ -41,8 +28,8 @@ function getConfig($section,$key,$default=false) {
 /**
  * Sets the design theme - themes options are: swanky-purse, trontastic and classic
  */
-if(getConfig('system','theme')) {
-	define('THEME', getConfig('system','theme'));
+if(c::getConfig('system','theme')) {
+ 	 define('THEME', c::getConfig('system','theme'));
 } else {
 	define('THEME', 'trontastic');
 }
@@ -52,26 +39,25 @@ if(getConfig('system','theme')) {
  * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
  * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
  */
-$firstServer = getConfig('mongo','0');
+ $firstServer = c::getConfig('mongo','0');
 if(!empty($firstServer) && strpos($firstServer,':')!==false) {
 	// Find all the servers in the config
 	$GLOBALS['servers'] = array();
 	for($i=0;$i<100;$i++) {
-		$serverInfo = getConfig('mongo',strval($i));
+		$serverInfo = c::getConfig('mongo',strval($i));
 		if(!empty($serverInfo)) {
-			$GLOBALS['servers'][$i] = getConfig('mongo',strval($i));
+			$GLOBALS['servers'][$i] = c::getConfig('mongo',strval($i));
 		} else {
 			break;
 		} 
 	}
-	$GLOBALS['selected_server'] = intval(getConfig('mongo','selected_server',0));
+	$GLOBALS['selected_server'] = intval(c::getConfig('mongo','selected_server',0));
 	list($host,$port) = explode(':',$GLOBALS['servers'][$GLOBALS['selected_server']]);
 	$unpwd = '';
-	if(getConfig('mongo','username') && getConfig('mongo','password')) {
-		$unpwd = $getConfig('mongo','username') . ':' . getConfig('mongo','password') . '@';
+	if(c::getConfig('mongo','username') && c::getConfig('mongo','password')) {
+		$unpwd = c::getConfig('mongo','username') . ':' . c::getConfig('mongo','password') . '@';
 	}
 	define('MONGO_CONNECTION', "mongodb://{$unpwd}{$host}:{$port}");
-	echo "Selected server:{$host}:{$port}<br/>";
 } else {
 	define('MONGO_CONNECTION', '');
 }
@@ -487,6 +473,33 @@ class moadminModel {
             'to' => self::$dbName . '.' . $to,
         ));
     }
+    
+    /**
+     * Copy specified collection
+     *
+     * @param string $collection
+     * @return array
+     */
+	public function copyCollection() {
+		$database = "ehow";
+		$collectionName = "en.us.article";
+		$col = $this->mongo->selectCollection($collectionName);
+		$cursor = $col->find();
+		echo "Found:". $cursor->count();
+
+		$destServer = "mongodb://".$GLOBALS['servers'][0];
+		$dest = new Mongo($destServer);
+		$destDB = $dest->selectDB($database);
+		$destCollection = $destDB->selectCollection($collectionName);
+
+		$returnArray = array();
+		while($cursor->hasNext()) {
+			$row = $cursor->getNext();
+			//$result = $this->collection->update($queryArray, array('$set' => $row ), array("upsert" => true)); // array("info.1" => array("author" => "Jim")) 
+			$result = $destCollection->insert($row); // array("info.1" => array("author" => "Jim")) 
+
+		}
+	}
 
     /**
      * Gets a list of the indexes on a collection
@@ -1835,6 +1848,35 @@ class formHelper {
 }
 
 /**
+ * Config file class for optional configuration settings
+ */
+class c {
+	public static $paths = array('./','../');
+	
+	/**
+	 * Store settings in config.ini so code doesn't have to be changed to configure.
+	 * Note: On Production, config path should be set outside web accessible directory -- usually ../config.ini
+	 */
+	static function loadConfig() {
+		$ini = 'moconfig.ini';
+		foreach(self::$paths as $path) {
+			if(is_file($path.$ini)) {
+				$GLOBALS['config'] = parse_ini_file($path.$ini,true);
+				break;
+			}
+			
+		}
+	}
+	
+	static function getConfig($section,$key,$default=false) {
+		if(isset($GLOBALS['config'][$section][$key])) {
+			$default = $GLOBALS['config'][$section][$key];
+		}
+		return $default;
+	}
+}
+
+/**
  * phpMoAdmin specific functionality
  */
 class phpMoAdmin {
@@ -2032,7 +2074,7 @@ PI8 YY88888P88P     `Y8PI8 YY88     88    88    `Y8P"Y8888P"   "Y8P"         `Y8
 </pre>';
 echo '<div id="bodycontent" class="ui-widget-content"><h1 style="float: right;">'
     . $html->link('http://www.phpmoadmin.com', $phpmoadmin, array('title' => 'phpMoAdmin')) . '</h1>';
-
+echo "<div>Selected server: {$host}:{$port}</div>";
 if (isset($accessControl) && !isset($_SESSION['user'])) {
     if (isset($_POST['username'])) {
         $_POST = array_map('trim', $_POST);
