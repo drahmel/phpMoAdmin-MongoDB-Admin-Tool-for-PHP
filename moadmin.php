@@ -480,17 +480,16 @@ class moadminModel {
      * @param string $collection
      * @return array
      */
-	public function copyCollection() {
-		$database = "ehow";
-		$collectionName = "en.us.article";
-		$col = $this->mongo->selectCollection($collectionName);
+	public function copyCollectionRun($fromServer,$fromDB,$fromCollection,
+                    $toServer,$toDB,$toCollection) {
+		$col = $this->mongo->selectCollection($fromCollection);
 		$cursor = $col->find();
 		echo "Found:". $cursor->count();
 
-		$destServer = "mongodb://".$GLOBALS['servers'][0];
+		$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
 		$dest = new Mongo($destServer);
-		$destDB = $dest->selectDB($database);
-		$destCollection = $destDB->selectCollection($collectionName);
+		$destDB = $dest->selectDB($toDB);
+		$destCollection = $destDB->selectCollection($toCollection);
 
 		$returnArray = array();
 		while($cursor->hasNext()) {
@@ -500,6 +499,11 @@ class moadminModel {
 
 		}
 	}
+	public function copyCollection() {
+
+            return "<h1>CC</h1>";
+            //$this->copyCollection(1,"ehow", "en.us.article", 0,"ehow", "en.us.article");
+        }
 
     /**
      * Gets a list of the indexes on a collection
@@ -803,6 +807,10 @@ class moadminComponent {
             self::$model->$action();
             load::redirect(get::url());
             return;
+        } else if ($action == 'copyCollection') {
+            $this->mongo[$action] = self::$model->$action();
+            unset($this->mongo['listCollections']);
+            //load::redirect(get::url());
         }
 
         if (isset($_GET['collection']) && $action != 'listCollections' && method_exists(self::$model, $action)) {
@@ -2074,7 +2082,7 @@ PI8 YY88888P88P     `Y8PI8 YY88     88    88    `Y8P"Y8888P"   "Y8P"         `Y8
 </pre>';
 echo '<div id="bodycontent" class="ui-widget-content"><h1 style="float: right;">'
     . $html->link('http://www.phpmoadmin.com', $phpmoadmin, array('title' => 'phpMoAdmin')) . '</h1>';
-echo "<div>Selected server: {$host}:{$port}</div>";
+    echo "<div>Selected server: <span class='ui-widget-header'>{$host}:{$port}</span></div>";
 if (isset($accessControl) && !isset($_SESSION['user'])) {
     if (isset($_POST['username'])) {
         $_POST = array_map('trim', $_POST);
@@ -2165,7 +2173,8 @@ if (isset($mo->mongo['listCollections'])) {
        . $form->getInput(array('name' => 'action', 'type' => 'hidden', 'value' => 'createCollection'))
        . $form->getInput(array('type' => 'submit', 'value' => 'Add new collection', 'class' => 'ui-state-hover'))
        . $form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden'))
-       . ' &nbsp; &nbsp; &nbsp; [' . $html->link($baseUrl . '?action=getStats', 'stats') . ']');
+       . ' &nbsp; &nbsp; &nbsp; [' . $html->link($baseUrl . '?action=getStats', 'stats') . ']'
+       . ' &nbsp; &nbsp; &nbsp; [' . $html->link($baseUrl . '?action=copyCollection', 'copy collection') . ']');
     echo $form->getFormClose();
 
     if (!$mo->mongo['listCollections']) {
@@ -2504,6 +2513,22 @@ mo.submitQuery = function() {
         echo '</li>';
     }
     echo '</ul>';
+} else if (isset($mo->mongo['copyCollection'])) {
+	echo "<h1>copyCollection</h1>";
+   echo '<ul>';
+    echo '<li>Source Server</li>';
+    echo '<li>Source Database</li>';
+    echo '<li>Source Collection</li>';
+    echo '<li>Destination Server</li>';
+    echo '<li>Destination Database</li>';
+    echo '<li>Destination Collection</li>';
+    echo '</ul>';
+    echo $form->getFormOpen(array('action' => $baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)));
+    //echo $html->div($form->getInput($textarea)
+      // . $form->getInput(array('name' => 'action', 'type' => 'text', 'value' => 'editObject')));
+    echo $html->div($form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden'))
+       . $form->getInput(array('type' => 'submit', 'value' => 'Copy Collection', 'class' => 'ui-state-hover')));
+    echo $form->getFormClose();
 }
 echo '</div>'; //end of bodycontent
 
