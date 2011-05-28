@@ -19,6 +19,12 @@ $iniPath = 'config.ini';
 if(is_file($iniPath)) {
 	$GLOBALS['config'] = parse_ini_file($iniPath,true);
 }
+function getConfig($section,$key,$default=false) {
+	if(isset($GLOBALS['config'][$section][$key])) {
+		$default = $GLOBALS['config'][$section][$key];
+	}
+	return $default;
+}
 
 /**
  * To enable password protection, uncomment below and then change the username => password
@@ -35,10 +41,10 @@ if(is_file($iniPath)) {
 /**
  * Sets the design theme - themes options are: swanky-purse, trontastic and classic
  */
-if(isset($GLOBALS['config']['system']['theme'])) {
- define('THEME', $GLOBALS['config']['system']['theme']);
+if(getConfig('system','theme')) {
+	define('THEME', getConfig('system','theme'));
 } else {
- define('THEME', 'trontastic');
+	define('THEME', 'trontastic');
 }
 
 /**
@@ -46,14 +52,26 @@ if(isset($GLOBALS['config']['system']['theme'])) {
  * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
  * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
  */
-if(isset($GLOBALS['config']['mongo']['0'])) {
-	$dbInfo = $GLOBALS['config']['mongo']['0'];
-	list($host,$port) = explode(':',$GLOBALS['config']['mongo']['0']);
+$firstServer = getConfig('mongo','0');
+if(!empty($firstServer) && strpos($firstServer,':')!==false) {
+	// Find all the servers in the config
+	$GLOBALS['servers'] = array();
+	for($i=0;$i<100;$i++) {
+		$serverInfo = getConfig('mongo',strval($i));
+		if(!empty($serverInfo)) {
+			$GLOBALS['servers'][$i] = getConfig('mongo',strval($i));
+		} else {
+			break;
+		} 
+	}
+	$GLOBALS['selected_server'] = intval(getConfig('mongo','selected_server',0));
+	list($host,$port) = explode(':',$GLOBALS['servers'][$GLOBALS['selected_server']]);
 	$unpwd = '';
-	if(isset($GLOBALS['config']['mongo']['username']) && isset($GLOBALS['config']['mongo']['password'])) {
-		$unpwd = $GLOBALS['config']['mongo']['username'] . ':' . $GLOBALS['config']['mongo']['password'] . '@';
+	if(getConfig('mongo','username') && getConfig('mongo','password')) {
+		$unpwd = $getConfig('mongo','username') . ':' . getConfig('mongo','password') . '@';
 	}
 	define('MONGO_CONNECTION', "mongodb://{$unpwd}{$host}:{$port}");
+	echo "Selected server:{$host}:{$port}<br/>";
 } else {
 	define('MONGO_CONNECTION', '');
 }
