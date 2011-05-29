@@ -12,6 +12,9 @@
  */
 
 c::loadConfig();
+if(c::getConfig('system','debug')) {
+    ini_set('display_errors',1);	
+}
 
 /**
  * To enable password protection, uncomment below and then change the username => password
@@ -280,8 +283,10 @@ class moadminModel {
      * Returns a new Mongo connection
      * @return Mongo
      */
-    protected function _mongo() {
-        $connection = (!MONGO_CONNECTION ? 'mongodb://localhost:27017' : MONGO_CONNECTION);
+    protected function _mongo($connection=false) {
+    	    if($connection===false) {
+    	    	    $connection = (!MONGO_CONNECTION ? 'mongodb://localhost:27017' : MONGO_CONNECTION);
+    	    }
         return (!REPLICA_SET ? new Mongo($connection) : new Mongo($connection, array('replicaSet' => true)));
     }
 
@@ -289,7 +294,7 @@ class moadminModel {
      * Connects to a Mongo database if the name of one is supplied as an argument
      * @param string $db
      */
-    public function __construct($db = null) {
+    public function __construct($db = null,$connection=false) {
         if (self::$databaseWhitelist && !in_array($db, self::$databaseWhitelist)) {
             $db = self::$dbName = $_GET['db'] = current(self::$databaseWhitelist);
         }
@@ -298,7 +303,7 @@ class moadminModel {
                 throw new mongoExtensionNotInstalled();
             }
             try {
-                $this->_db = $this->_mongo();
+                $this->_db = $this->_mongo($connection);
                 $this->mongo = $this->_db->selectDB($db);
             } catch (MongoConnectionException $e) {
                 throw new cannotConnectToMongoServer();
@@ -432,12 +437,15 @@ class moadminModel {
      * Gets a list of database collections
      * @return array
      */
-    public function listCollections() {
+    public function listCollections($mongoRef=false) {
+    	    if($mongoRef===false) {
+    	    	    $mongoRef = $this->mongo;
+    	    }
         $collections = array();
-        $MongoCollectionObjects = $this->mongo->listCollections();
+        $MongoCollectionObjects = $mongoRef->listCollections();
         foreach ($MongoCollectionObjects as $collection) {
             $collection = substr(strstr((string) $collection, '.'), 1);
-            $collections[$collection] = $this->mongo->selectCollection($collection)->count();
+            $collections[$collection] = $mongoRef->selectCollection($collection)->count();
         }
         ksort($collections);
         return $collections;
@@ -810,7 +818,6 @@ class moadminComponent {
         } else if ($action == 'copyCollection') {
             $this->mongo[$action] = self::$model->$action();
             unset($this->mongo['listCollections']);
-            //load::redirect(get::url());
         }
 
         if (isset($_GET['collection']) && $action != 'listCollections' && method_exists(self::$model, $action)) {
@@ -2514,21 +2521,48 @@ mo.submitQuery = function() {
     }
     echo '</ul>';
 } else if (isset($mo->mongo['copyCollection'])) {
-	echo "<h1>copyCollection</h1>";
-   echo '<ul>';
-    echo '<li>Source Server</li>';
-    echo '<li>Source Database</li>';
-    echo '<li>Source Collection</li>';
-    echo '<li>Destination Server</li>';
-    echo '<li>Destination Database</li>';
-    echo '<li>Destination Collection</li>';
-    echo '</ul>';
-    echo $form->getFormOpen(array('action' => $baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)));
-    //echo $html->div($form->getInput($textarea)
-      // . $form->getInput(array('name' => 'action', 'type' => 'text', 'value' => 'editObject')));
-    echo $html->div($form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden'))
-       . $form->getInput(array('type' => 'submit', 'value' => 'Copy Collection', 'class' => 'ui-state-hover')));
-    echo $form->getFormClose();
+	echo "<h1>Copy Collection</h1>";
+	$optStr = '';
+	foreach($GLOBALS['servers'] as $server=>$connect) {
+		$optStr .= "<option>$connect</option>";
+	}
+	$toServer = 0;
+	$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
+	$dest = new moadminModel('admin',$destServer);
+	$dbs = $dest->listDbs();
+	$dbStr = '';
+	foreach($dbs as $dbName=>$dbInfo) {
+		$dbStr .= "<option>$dbInfo</option>";
+	}
+
+	$colls = $dest->listCollections();
+	$colStr = '';
+	foreach($colls as $colName=>$colInfo) {
+		$colStr .= "<option>$colName</option>";
+	}
+	?>
+	<style>
+	fieldset.cc { 
+		border:1px solid green; 
+		padding:8px;
+		margin:15px; 
+	}
+	</style>
+	<form>
+  <fieldset class="cc">
+    <legend>Source:</legend>
+    Server: <select><?php echo $optStr; ?></select><br />
+    Database: <select><?php echo $dbStr; ?></select><br />
+    Collection: <select><?php echo $colStr; ?></select>
+  </fieldset>
+ <fieldset class="cc">
+    <legend>Destination:</legend>
+    Server: <select><?php echo $optStr; ?></select><br />
+    Database: <select><?php echo $dbStr; ?></select><br />
+    Collection: <select><?php echo $colStr; ?></select>
+  </fieldset>
+</form>
+<?php
 }
 echo '</div>'; //end of bodycontent
 
