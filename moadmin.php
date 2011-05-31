@@ -2572,18 +2572,35 @@ mo.submitQuery = function() {
 	}
 	</style>
 <script>
-function changeServer() {
+function changeDB(prefix) {
 	var url = "/moadmin.php?action=copyCollection&ajax=listcolls";
-	url += "&server="+$('#src_servers')[0].value;
-	url += "&db="+$('#src_dbs')[0].value;
+	url += "&server="+$('#'+prefix+'_servers')[0].value;
+	url += "&db="+$('#'+prefix+'_dbs')[0].value;
 	$.getJSON(url, function(data) {
 	  var items = [];
 	
 	  $.each(data, function(key, val) {
-	    items.push('<option id="' + key + '">' + key + ' (' + val + ' objects)' + '</option>');
+	    items.push('<option id="' + key + '" value="'+key+'">' + key + ' (' + val + ' objects)' + '</option>');
 	  });
 	
-	 $('#src_colls').html(items.join(''));
+	 $('#'+prefix+'_colls').html(items.join(''));
+
+	});
+}
+function changeServer(prefix) {
+	document.getElementById(prefix+'_dbs').innerHTML = '';
+	document.getElementById(prefix+'_colls').innerHTML = '';
+	
+	var url = "/moadmin.php?action=copyCollection&ajax=listdbs";
+	url += "&server="+$('#'+prefix+'_servers')[0].value;
+	$.getJSON(url, function(data) {
+	  var items = [];
+	
+	  $.each(data, function(key, val) {
+	    items.push('<option id="' + key + '" value="'+key+'">' + val + '</option>');
+	  });
+	
+	 $('#'+prefix+'_dbs').html(items.join(''));
 
 	});
 }
@@ -2595,15 +2612,15 @@ $(document).ready(function () {
 <form>
   <fieldset class="cc">
     <legend>Source:</legend>
-    Server: <select id="src_servers"><?php echo $optStr; ?></select><br />
-    Database: <select id="src_dbs" onchange="changeServer();return false;"><?php echo $dbStr; ?></select><br />
+    Server: <select id="src_servers" onchange="changeServer('src');return false;"><?php echo $optStr; ?></select><br />
+    Database: <select id="src_dbs" onchange="changeDB('src');return false;"><?php echo $dbStr; ?></select><br />
     Collection: <select id="src_colls"><?php echo $colStr; ?></select>
   </fieldset>
  <fieldset class="cc">
     <legend>Destination:</legend>
-    Server: <select><?php echo $optStr; ?></select><br />
-    Database: <select><?php echo $dbStr; ?></select><br />
-    Collection: <select><?php echo $colStr; ?></select>
+    Server: <select id="dest_servers" onchange="changeServer('dest');return false;"><?php echo $optStr; ?></select><br />
+    Database: <select id="dest_dbs" onchange="changeDB('dest');return false;"><?php echo $dbStr; ?></select><br />
+    Collection: <select id="dest_colls"><?php echo $colStr; ?></select>
   </fieldset>
 </form>
 <?php
