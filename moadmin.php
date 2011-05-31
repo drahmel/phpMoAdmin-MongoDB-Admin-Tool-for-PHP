@@ -42,7 +42,7 @@ if(c::getConfig('system','theme')) {
  * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
  * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
  */
- $firstServer = c::getConfig('mongo','0');
+$firstServer = c::getConfig('mongo','0');
 if(!empty($firstServer) && strpos($firstServer,':')!==false) {
 	// Find all the servers in the config
 	$GLOBALS['servers'] = array();
@@ -75,6 +75,31 @@ define('REPLICA_SET', false);
  * Default limit for number of objects to display per page - set to 0 for no limit
  */
 define('OBJECT_LIMIT', 100);
+
+if(isset($_REQUEST['ajax'])) {
+	switch($_REQUEST['ajax']) {
+		case 'listdbs':
+			$toServer = isset($_REQUEST['server'])	?	intval($_REQUEST['server'])	:	0;
+			$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
+			$dest = new moadminModel('admin',$destServer);
+			$dbs = $dest->listDbs();
+			header('Content-type: application/json');
+			echo json_encode($dbs);
+			die();
+			break;		
+		case 'listcolls':
+			$toServer = isset($_REQUEST['server'])	?	intval($_REQUEST['server'])	:	0;
+			$toDB = isset($_REQUEST['db'])	?	$_REQUEST['db']	:	'admin';
+			$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
+			$dest = new moadminModel($toDB,$destServer);
+			$colls = $dest->listCollections();
+			header('Content-type: application/json');
+			echo json_encode($colls);
+			die();
+			break;		
+	}
+}
+
 
 /**
  * Vork core-functionality tools
@@ -508,9 +533,7 @@ class moadminModel {
 		}
 	}
 	public function copyCollection() {
-
             return "<h1>CC</h1>";
-            //$this->copyCollection(1,"ehow", "en.us.article", 0,"ehow", "en.us.article");
         }
 
     /**
@@ -2524,7 +2547,7 @@ mo.submitQuery = function() {
 	echo "<h1>Copy Collection</h1>";
 	$optStr = '';
 	foreach($GLOBALS['servers'] as $server=>$connect) {
-		$optStr .= "<option>$connect</option>";
+		$optStr .= "<option value='$server'>$connect</option>";
 	}
 	$toServer = 0;
 	$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
@@ -2532,7 +2555,7 @@ mo.submitQuery = function() {
 	$dbs = $dest->listDbs();
 	$dbStr = '';
 	foreach($dbs as $dbName=>$dbInfo) {
-		$dbStr .= "<option>$dbInfo</option>";
+		$dbStr .= "<option value='$dbName'>$dbInfo</option>";
 	}
 
 	$colls = $dest->listCollections();
@@ -2548,12 +2571,33 @@ mo.submitQuery = function() {
 		margin:15px; 
 	}
 	</style>
-	<form>
+<script>
+function changeServer() {
+	var url = "/moadmin.php?action=copyCollection&ajax=listcolls";
+	url += "&server="+$('#src_servers')[0].value;
+	url += "&db="+$('#src_dbs')[0].value;
+	$.getJSON(url, function(data) {
+	  var items = [];
+	
+	  $.each(data, function(key, val) {
+	    items.push('<option id="' + key + '">' + key + ' (' + val + ' objects)' + '</option>');
+	  });
+	
+	 $('#src_colls').html(items.join(''));
+
+	});
+}
+$(document).ready(function () {
+	//$('#src_dbs')[0].change(changeServer);
+});
+</script>
+<ul class='my-new-list' />
+<form>
   <fieldset class="cc">
     <legend>Source:</legend>
-    Server: <select><?php echo $optStr; ?></select><br />
-    Database: <select><?php echo $dbStr; ?></select><br />
-    Collection: <select><?php echo $colStr; ?></select>
+    Server: <select id="src_servers"><?php echo $optStr; ?></select><br />
+    Database: <select id="src_dbs" onchange="changeServer();return false;"><?php echo $dbStr; ?></select><br />
+    Collection: <select id="src_colls"><?php echo $colStr; ?></select>
   </fieldset>
  <fieldset class="cc">
     <legend>Destination:</legend>
