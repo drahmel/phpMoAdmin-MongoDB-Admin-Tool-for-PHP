@@ -15,6 +15,7 @@ c::loadConfig();
 if(c::getConfig('system','debug')) {
     ini_set('display_errors',1);	
 }
+c::setupServerList();
 
 /**
  * To enable password protection, uncomment below and then change the username => password
@@ -37,33 +38,6 @@ if(c::getConfig('system','theme')) {
 	define('THEME', 'trontastic');
 }
 
-/**
- * To connect to a remote or authenticated Mongo instance, define the connection string in the MONGO_CONNECTION constant
- * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
- * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
- */
-$firstServer = c::getConfig('mongo','0');
-if(!empty($firstServer) && strpos($firstServer,':')!==false) {
-	// Find all the servers in the config
-	$GLOBALS['servers'] = array();
-	for($i=0;$i<100;$i++) {
-		$serverInfo = c::getConfig('mongo',strval($i));
-		if(!empty($serverInfo)) {
-			$GLOBALS['servers'][$i] = c::getConfig('mongo',strval($i));
-		} else {
-			break;
-		} 
-	}
-	$GLOBALS['selected_server'] = intval(c::getConfig('mongo','selected_server',0));
-	list($host,$port) = explode(':',$GLOBALS['servers'][$GLOBALS['selected_server']]);
-	$unpwd = '';
-	if(c::getConfig('mongo','username') && c::getConfig('mongo','password')) {
-		$unpwd = c::getConfig('mongo','username') . ':' . c::getConfig('mongo','password') . '@';
-	}
-	define('MONGO_CONNECTION', "mongodb://{$unpwd}{$host}:{$port}");
-} else {
-	define('MONGO_CONNECTION', '');
-}
 
 /**
  * Set to true when connecting to a Mongo replicaSet
@@ -77,27 +51,7 @@ define('REPLICA_SET', false);
 define('OBJECT_LIMIT', 100);
 
 if(isset($_REQUEST['ajax'])) {
-	switch($_REQUEST['ajax']) {
-		case 'listdbs':
-			$toServer = isset($_REQUEST['server'])	?	intval($_REQUEST['server'])	:	0;
-			$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
-			$dest = new moadminModel('admin',$destServer);
-			$dbs = $dest->listDbs();
-			header('Content-type: application/json');
-			echo json_encode($dbs);
-			die();
-			break;		
-		case 'listcolls':
-			$toServer = isset($_REQUEST['server'])	?	intval($_REQUEST['server'])	:	0;
-			$toDB = isset($_REQUEST['db'])	?	$_REQUEST['db']	:	'admin';
-			$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
-			$dest = new moadminModel($toDB,$destServer);
-			$colls = $dest->listCollections();
-			header('Content-type: application/json');
-			echo json_encode($colls);
-			die();
-			break;		
-	}
+	ajax::handleRequest();
 }
 
 
@@ -515,9 +469,11 @@ class moadminModel {
      */
 	public function copyCollectionRun($fromServer,$fromDB,$fromCollection,
                     $toServer,$toDB,$toCollection) {
+		$db = $this->setDb($fromDB);
 		$col = $this->mongo->selectCollection($fromCollection);
 		$cursor = $col->find();
-		echo "Found:". $cursor->count();
+		$numFound = $cursor->count();
+		//echo "Found:". $cursor->count();
 
 		$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
 		$dest = new Mongo($destServer);
@@ -525,12 +481,16 @@ class moadminModel {
 		$destCollection = $destDB->selectCollection($toCollection);
 
 		$returnArray = array();
+		$numCopied = 0;
 		while($cursor->hasNext()) {
 			$row = $cursor->getNext();
-			//$result = $this->collection->update($queryArray, array('$set' => $row ), array("upsert" => true)); // array("info.1" => array("author" => "Jim")) 
-			$result = $destCollection->insert($row); // array("info.1" => array("author" => "Jim")) 
+			$result = $destCollection->insert($row);
+			if($result) {
+				$numCopied++;
+			}
 
 		}
+		return array('found'=>$numFound,'copied'=>$numCopied);
 	}
 	public function copyCollection() {
             return "<h1>CC</h1>";
@@ -1889,7 +1849,8 @@ class formHelper {
  * Config file class for optional configuration settings
  */
 class c {
-	public static $paths = array('./','../');
+	// Start at path up from current to allow an override that isn't in repo
+	public static $paths = array('../','./');
 	
 	/**
 	 * Store settings in config.ini so code doesn't have to be changed to configure.
@@ -1912,7 +1873,90 @@ class c {
 		}
 		return $default;
 	}
+	/**
+	 * To connect to a remote or authenticated Mongo instance, define the connection string in the MONGO_CONNECTION constant
+	 * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
+	 * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
+	 */
+	static function setupServerList() {
+		$firstServer = c::getConfig('mongo','0');
+		if(!empty($firstServer) && strpos($firstServer,':')!==false) {
+			// Find all the servers in the config
+			$GLOBALS['servers'] = array();
+			for($i=0;$i<100;$i++) {
+				$serverInfo = c::getConfig('mongo',strval($i));
+				if(!empty($serverInfo)) {
+					$GLOBALS['servers'][$i] = c::getConfig('mongo',strval($i));
+				} else {
+					break;
+				} 
+			}
+			$GLOBALS['selected_server'] = intval(c::getConfig('mongo','selected_server',0));
+			list($host,$port) = explode(':',$GLOBALS['servers'][$GLOBALS['selected_server']]);
+			$unpwd = '';
+			if(c::getConfig('mongo','username') && c::getConfig('mongo','password')) {
+				$unpwd = c::getConfig('mongo','username') . ':' . c::getConfig('mongo','password') . '@';
+			}
+			define('MONGO_CONNECTION', "mongodb://{$unpwd}{$host}:{$port}");
+		} else {
+			define('MONGO_CONNECTION', '');
+		}
+	}
+	static function showSelectedServer() {
+		if(isset($GLOBALS['servers'][$GLOBALS['selected_server']])) {
+			list($host,$port) = explode(':',$GLOBALS['servers'][$GLOBALS['selected_server']]);
+			echo "<div>Selected server: <span class='ui-widget-header'>{$host}:{$port}</span></div>";
+		}	 	 
+	}
+
 }
+
+/**
+ * Handle Ajax requests
+ */
+class ajax {
+	static function handleRequest() {
+		switch($_REQUEST['ajax']) {
+			case 'listdbs':
+				$toServer = isset($_REQUEST['server'])	?	intval($_REQUEST['server'])	:	0;
+				$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
+				$dest = new moadminModel('admin',$destServer);
+				$dbs = $dest->listDbs();
+				header('Content-type: application/json');
+				echo json_encode($dbs);
+				die();
+				break;		
+			case 'listcolls':
+				$toServer = isset($_REQUEST['server'])	?	intval($_REQUEST['server'])	:	0;
+				$toDB = isset($_REQUEST['db'])	?	$_REQUEST['db']	:	'admin';
+				$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
+				$dest = new moadminModel($toDB,$destServer);
+				$colls = $dest->listCollections();
+				header('Content-type: application/json');
+				echo json_encode($colls);
+				die();
+				break;		
+			case 'copycollection':
+				$fromServer = isset($_REQUEST['fromserver'])	?	intval($_REQUEST['fromserver'])	:	0;
+				$fromDB = isset($_REQUEST['fromdb'])	?	$_REQUEST['fromdb']	:	'test';
+				$fromCollection = isset($_REQUEST['fromcoll'])	?	$_REQUEST['fromcoll']	:	'admin';
+	
+				$toServer = isset($_REQUEST['toserver'])	?	intval($_REQUEST['toserver'])	:	0;
+				$toDB = isset($_REQUEST['todb'])	?	$_REQUEST['todb']	:	'test';
+				$toCollection = isset($_REQUEST['tocoll']) && !empty($_REQUEST['tocoll'])	
+					?	$_REQUEST['tocoll']	:	$fromCollection;
+				
+				$destServer = "mongodb://".$GLOBALS['servers'][$fromServer];
+				$mo = new moadminModel($fromDB,$destServer);
+				$result = $mo->copyCollectionRun($fromServer,$fromDB,$fromCollection,$toServer,$toDB,$toCollection);
+				header('Content-type: application/json');
+				echo json_encode($result);
+				die();
+				break;		
+		}
+	}
+}
+
 
 /**
  * phpMoAdmin specific functionality
@@ -2112,7 +2156,7 @@ PI8 YY88888P88P     `Y8PI8 YY88     88    88    `Y8P"Y8888P"   "Y8P"         `Y8
 </pre>';
 echo '<div id="bodycontent" class="ui-widget-content"><h1 style="float: right;">'
     . $html->link('http://www.phpmoadmin.com', $phpmoadmin, array('title' => 'phpMoAdmin')) . '</h1>';
-    echo "<div>Selected server: <span class='ui-widget-header'>{$host}:{$port}</span></div>";
+    c::showSelectedServer();
 if (isset($accessControl) && !isset($_SESSION['user'])) {
     if (isset($_POST['username'])) {
         $_POST = array_map('trim', $_POST);
@@ -2544,24 +2588,10 @@ mo.submitQuery = function() {
     }
     echo '</ul>';
 } else if (isset($mo->mongo['copyCollection'])) {
-	echo "<h1>Copy Collection</h1>";
+	echo "<h1 style='margin-top:20px;'>Copy Collection</h1>";
 	$optStr = '';
 	foreach($GLOBALS['servers'] as $server=>$connect) {
 		$optStr .= "<option value='$server'>$connect</option>";
-	}
-	$toServer = 0;
-	$destServer = "mongodb://".$GLOBALS['servers'][$toServer];
-	$dest = new moadminModel('admin',$destServer);
-	$dbs = $dest->listDbs();
-	$dbStr = '';
-	foreach($dbs as $dbName=>$dbInfo) {
-		$dbStr .= "<option value='$dbName'>$dbInfo</option>";
-	}
-
-	$colls = $dest->listCollections();
-	$colStr = '';
-	foreach($colls as $colName=>$colInfo) {
-		$colStr .= "<option>$colName</option>";
 	}
 	?>
 	<style>
@@ -2577,52 +2607,97 @@ function changeDB(prefix) {
 	url += "&server="+$('#'+prefix+'_servers')[0].value;
 	url += "&db="+$('#'+prefix+'_dbs')[0].value;
 	$.getJSON(url, function(data) {
-	  var items = [];
-	
-	  $.each(data, function(key, val) {
-	    items.push('<option id="' + key + '" value="'+key+'">' + key + ' (' + val + ' objects)' + '</option>');
-	  });
-	
-	 $('#'+prefix+'_colls').html(items.join(''));
-
+		var items = [];
+		if(prefix=='dest') {
+			items.push('<option id="new_coll" value="">New collection</option>');
+		}
+		
+		$.each(data, function(key, val) {
+			items.push('<option id="' + key + '" value="'+key+'">' + key + ' (' + val + ' objects)' + '</option>');
+		});
+		
+		$('#'+prefix+'_colls').html(items.join(''));	
 	});
 }
 function changeServer(prefix) {
-	document.getElementById(prefix+'_dbs').innerHTML = '';
-	document.getElementById(prefix+'_colls').innerHTML = '';
+	// Changing server, so clear existing boxes
+	$('#'+prefix+'_dbs')[0].innerHTML = '';
+	$('#'+prefix+'_colls')[0].innerHTML = '';
 	
 	var url = "/moadmin.php?action=copyCollection&ajax=listdbs";
 	url += "&server="+$('#'+prefix+'_servers')[0].value;
 	$.getJSON(url, function(data) {
-	  var items = [];
-	
-	  $.each(data, function(key, val) {
-	    items.push('<option id="' + key + '" value="'+key+'">' + val + '</option>');
-	  });
-	
-	 $('#'+prefix+'_dbs').html(items.join(''));
-
+		var items = [];
+		
+		$.each(data, function(key, val) {
+			items.push('<option id="' + key + '" value="'+key+'">' + val + '</option>');
+		});
+		
+		$('#'+prefix+'_dbs').html(items.join(''));
 	});
 }
-$(document).ready(function () {
-	//$('#src_dbs')[0].change(changeServer);
+function copyCollection() {
+	var url = "/moadmin.php?action=copyCollection&ajax=copycollection";
+	url += "&fromserver="+$('#src_servers')[0].value;
+	url += "&fromdb="+$('#src_dbs')[0].value;
+	url += "&fromcoll="+$('#src_colls')[0].value;
+	url += "&toserver="+$('#dest_servers')[0].value;
+	url += "&todb="+$('#dest_dbs')[0].value;
+	url += "&tocoll="+$('#dest_colls')[0].value;
+	console.log(url);
+	$.getJSON(url, function(data) {
+		var items = [];
+		// Refresh collection list
+		changeDB('dest');
+		$.each(data, function(key, val) {
+			items.push(key+"="+val);
+		});
+		alert(items.join("\n"));
+	});
+}
+
+// Setup initial server info
+$(document).ready(function() {
+	changeServer('src');
+	changeServer('dest');
 });
+
 </script>
 <ul class='my-new-list' />
 <form>
-  <fieldset class="cc">
-    <legend>Source:</legend>
-    Server: <select id="src_servers" onchange="changeServer('src');return false;"><?php echo $optStr; ?></select><br />
-    Database: <select id="src_dbs" onchange="changeDB('src');return false;"><?php echo $dbStr; ?></select><br />
-    Collection: <select id="src_colls"><?php echo $colStr; ?></select>
-  </fieldset>
- <fieldset class="cc">
-    <legend>Destination:</legend>
-    Server: <select id="dest_servers" onchange="changeServer('dest');return false;"><?php echo $optStr; ?></select><br />
-    Database: <select id="dest_dbs" onchange="changeDB('dest');return false;"><?php echo $dbStr; ?></select><br />
-    Collection: <select id="dest_colls"><?php echo $colStr; ?></select>
-  </fieldset>
+	<fieldset class="cc">
+		<legend>Source:</legend>
+		Server: <select id="src_servers" onchange="changeServer('src');return false;"><?php echo $optStr; ?></select><br />
+		Database: <select id="src_dbs" onchange="changeDB('src');return false;"></select><br />
+		Collection: <select id="src_colls"></select>
+	</fieldset>
+	<fieldset class="cc">
+		<legend>Destination:</legend>
+		Server: <select id="dest_servers" onchange="changeServer('dest');return false;"><?php echo $optStr; ?></select><br />
+		Database: <select id="dest_dbs" onchange="changeDB('dest');return false;"></select><br />
+		Collection: <select id="dest_colls"></select>
+		</fieldset>
+	<button onclick="copyCollection(); return false;">Copy Collection</button>
 </form>
+<div style="margin-top:20px;">
+	<a href="#" onclick="$('#cc_help').show(); return false;">Show Help</a>
+</div>
+<div id="cc_help" style="display:none;">
+<p>Define the server selections in a config file called moconfig.ini at the current root or the directory above.</p>
+<p>Here is an example moconfig.ini:</p>
+<pre>
+[system]
+theme=classic
+debug=1
+
+[mongo]
+selected_server=0
+0=localhost:27017
+1=localhost:27017
+;username=USERNAME
+;password=PASSWORD
+</pre>
+</div>
 <?php
 }
 echo '</div>'; //end of bodycontent
