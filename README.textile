@@ -2,9 +2,8 @@ h1. Fork Features
 
 Fork will add:
 
-* Additional statistics
-* Configuration settings stored in config.ini
-* SQL query system for Mongo
+* Configuration settings stored in moconfig.ini
+* Copy Collection interface
 
 h1. phpMoAdmin
 
